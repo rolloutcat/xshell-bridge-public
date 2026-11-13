@@ -35,8 +35,10 @@ internal static class LocalAgentTests {
             Check(!json.Serialize(plan.PublicPreview()).Contains(agentToken), "preview leaked token");
             Directory.CreateDirectory(Path.Combine(root, "local-agent")); File.WriteAllText(initial.path, "unknown after preview");
             Reject(() => manager.Confirm(plan)); Check(File.ReadAllText(initial.path) == "unknown after preview", "unknown target overwritten"); File.Delete(initial.path); Directory.Delete(Path.Combine(root, "local-agent"));
-            var firstFailure = manager.Prepare("hospital", "gbk"); manager.BeforeManifestWrite = () => { throw new IOException("synthetic first write failure"); };
+            bool firstWriteReached = false;
+            var firstFailure = manager.Prepare("hospital", "gbk"); manager.BeforeManifestWrite = () => { firstWriteReached = true; throw new IOException("synthetic first write failure"); };
             Reject(() => manager.Confirm(firstFailure)); manager.BeforeManifestWrite = null;
+            Check(firstWriteReached, "first write fault injection was not reached; status=" + manager.Status().status);
             Check(manager.Status().status == "absent" && !File.Exists(initial.path), "first write rollback");
             plan = manager.Prepare("hospital", "gbk");
             manager.Confirm(plan);

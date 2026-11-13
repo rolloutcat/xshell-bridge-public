@@ -116,7 +116,7 @@ public sealed class LocalAgent {
         HostReverse.Safe(dir);
         if (Directory.Exists(dir)) return;
         if (!Directory.Exists(Path.GetDirectoryName(dir))) throw new IOException();
-        var acl = new DirectorySecurity(); acl.SetAccessRuleProtection(true, false);
+        var acl = new DirectorySecurity(); acl.SetAccessRuleProtection(true, false); acl.SetOwner(WindowsIdentity.GetCurrent().User);
         foreach (var sid in new[] { WindowsIdentity.GetCurrent().User, new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null) }) acl.AddAccessRule(new FileSystemAccessRule(sid, FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
         Directory.CreateDirectory(dir, acl); HostReverse.Safe(dir);
     }
@@ -208,7 +208,7 @@ public sealed class LocalAgent {
         }
         internal Held Stage(string destination, byte[] bytes, Held previous) {
             string temporary=System.IO.Path.Combine(System.IO.Path.GetDirectoryName(destination), ".local-"+Guid.NewGuid().ToString("N")+".tmp");
-            var acl=new FileSecurity(); acl.SetAccessRuleProtection(true,false);
+            var acl=new FileSecurity(); acl.SetAccessRuleProtection(true,false); acl.SetOwner(WindowsIdentity.GetCurrent().User);
             foreach(var sid in new[]{WindowsIdentity.GetCurrent().User,new SecurityIdentifier(WellKnownSidType.LocalSystemSid,null)}) acl.AddAccessRule(new FileSystemAccessRule(sid,FileSystemRights.FullControl,AccessControlType.Allow));
             var stream=new FileStream(temporary,FileMode.CreateNew,FileSystemRights.Read | FileSystemRights.Write | FileSystemRights.Delete,FileShare.Read,4096,FileOptions.WriteThrough,acl);
             var item=new Held { Stream=stream,Handle=stream.SafeFileHandle,Path=temporary,Original=destination,Previous=previous }; handles.Add(item); stages.Add(item);
