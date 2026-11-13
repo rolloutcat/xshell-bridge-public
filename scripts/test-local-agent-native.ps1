@@ -16,7 +16,7 @@ $refs = @('/r:System.Windows.Forms.dll','/r:System.Drawing.dll','/r:System.Web.E
 $base = @('Backend.cs','Backend.Approvals.cs','Backend.Removal.cs','Backend.HostReverse.cs','HostReverse.cs','LocalAgent.cs','Backend.LocalAgent.cs','Updates.cs','UpdateCandidate.cs','UpdateHandoff.cs','CodexLocator.cs','Integrations.cs','ConnectionProfiles.cs') | ForEach-Object { Join-Path $projectRoot "desktop\$_" }
 foreach ($test in @('LocalAgentTests','BackendLocalAgentTests')) {
     $exe = Join-Path $output "$test.exe"
-    & $csc /nologo /langversion:5 /target:exe "/main:XshellDesktop.$test" "/out:$exe" "/resource:$projectRoot\VERSION,XshellDesktop.VERSION" @refs @base (Join-Path $projectRoot "desktop\$test.cs")
+    & $csc /nologo /debug:full /optimize- /langversion:5 /target:exe "/main:XshellDesktop.$test" "/out:$exe" "/resource:$projectRoot\VERSION,XshellDesktop.VERSION" @refs @base (Join-Path $projectRoot "desktop\$test.cs")
     if ($LASTEXITCODE -ne 0) { throw "$test compilation failed" }
     if ($test -eq 'LocalAgentTests') { & $exe $junction } else { & $exe }
     if ($LASTEXITCODE -ne 0) { throw "$test failed" }
