@@ -98,7 +98,10 @@ internal static class LocalAgentTests {
             Reject(() => manager.Confirm(staleManifest)); File.WriteAllBytes(manifest, beforeManifest);
             var staleConfig = manager.Prepare("new group", "utf-8"); string client = Path.Combine(runtime, "client.json"), originalConfig = File.ReadAllText(client);
             File.WriteAllText(client, json.Serialize(new { endpoint = "http://127.0.0.1:17890", token = new string('d', 48) })); Reject(() => manager.Confirm(staleConfig)); File.WriteAllText(client, originalConfig);
-            File.Delete(manifest); Check(manager.Status().status == "conflict", "missing manifest accepted"); Reject(() => manager.Prepare("hospital", "auto")); HostReverse.WritePrivate(manifest, beforeManifest, false); File.SetAccessControl(manifest, beforeManifestAcl);
+            File.Delete(manifest); Check(manager.Status().status == "conflict", "missing manifest accepted"); Reject(() => manager.Prepare("hospital", "auto")); HostReverse.WritePrivate(manifest, beforeManifest, false);
+            var restoredManifestAcl = new System.Security.AccessControl.FileSecurity();
+            restoredManifestAcl.SetSecurityDescriptorBinaryForm(beforeManifestAcl.GetSecurityDescriptorBinaryForm(), System.Security.AccessControl.AccessControlSections.Access | System.Security.AccessControl.AccessControlSections.Owner | System.Security.AccessControl.AccessControlSections.Group);
+            File.SetAccessControl(manifest, restoredManifestAcl);
             Check(manager.Status().status != "conflict", "restored fixture must preserve manifest ownership and ACL");
             File.WriteAllText(manifest, "broken"); Check(manager.Status().status == "conflict", "broken manifest accepted"); File.WriteAllBytes(manifest, beforeManifest);
             string sourcePath=Path.Combine(bundle,"remote_bootstrap.js"), source=File.ReadAllText(sourcePath); File.Delete(sourcePath);
