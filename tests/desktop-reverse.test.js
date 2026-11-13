@@ -1,0 +1,72 @@
+'use strict';
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+// Native security/shutdown source guards complement the Windows fake-process lifecycle suite.
+const shellSource=fs.readFileSync('desktop/Shell.cs','utf8');
+const permissionSource=shellSource.slice(shellSource.indexOf('private void OnPermissionRequested'),shellSource.indexOf('private void OnDownloadStarting'));
+assert.match(permissionSource,/e\.State = CoreWebView2PermissionState\.Deny;/);
+assert.match(permissionSource,/e\.Handled = true;/);
+const closingSource=shellSource.slice(shellSource.indexOf('private async void OnFormClosing'),shellSource.indexOf('private void DisposeBackend'));
+assert.match(closingSource,/if \(closeInProgress\)\s+return;/);
+assert.match(closingSource,/await Task\.Run\(new Action\(DisposeBackend\)\);/);
+assert.match(closingSource,/DisposeBackend\)\);\s+closeAllowed = true;/);
+assert.match(closingSource,/catch \(Exception\)[\s\S]*关闭未完成[\s\S]*不重发结果未知的停机请求/);
+assert.doesNotMatch(closingSource,/stopping = false|webView\.Enabled = true|\.Wait\(|\.Result\b/);
+assert.match(closingSource,/finally\s*\{\s*closeInProgress = false;\s*\}\s*if \(closeAllowed\)\s+Close\(\);/);
+const disposeSource=shellSource.slice(shellSource.indexOf('private void DisposeBackend'),shellSource.indexOf('protected override void Dispose'));
+assert.match(disposeSource,/backendDisposalStarted = true;\s+backend\.Dispose\(\);\s+backendDisposed = true;/);
+assert.doesNotMatch(disposeSource,/catch/);
+const nativeSource=fs.readFileSync('desktop/HostReverse.cs','utf8');
+assert.match(nativeSource,/if \(owned\.Count != 0\) throw Failure\(\);/);
+assert.match(nativeSource,/if \(disposed && owned\.Count == 0\) return;/);
+const buildSource=fs.readFileSync('scripts/build-desktop.ps1','utf8');
+const nativeCompile=buildSource.split(/\r?\n/).find(line=>line.includes('/main:XshellDesktop.HostReverseTests'));
+assert.ok(nativeCompile && nativeCompile.includes("desktop\\HostReverseLifecycleTests.cs"),'native stop-failure/retry tests must compile with HostReverseTests');
+let source=fs.readFileSync('desktop/app.html','utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
+for(const [marker,file] of [['/*__ATTACHMENT_STATE__*/','desktop/attachment-state.js'],['/*__UPDATES_UI__*/','desktop/updates-ui.js']])source=source.replace(marker,()=>fs.readFileSync(file,'utf8'));
+const elements=new Map(),handlers={},receivers=[],sent=[],timers=[];
+function el(id){if(!elements.has(id))elements.set(id,{id,value:'',dataset:{},innerHTML:'',textContent:'',hidden:false,disabled:false,checked:false,classList:{toggle(){}},listeners:{},addEventListener(t,f){this.listeners[t]=f;},showModal(){this.open=true;},close(){this.open=false;},closest(){return this;},hasAttribute(k){return k==='data-close'&&this.dataset.close!==undefined;},before(){},scrollIntoView(){}});return elements.get(id);}
+const context=vm.createContext({console,document:{getElementById:el,createElement(){return el('created');},querySelectorAll(){return [];},addEventListener(t,f){(handlers[t]??=[]).push(f);}},window:{chrome:{webview:{addEventListener(_,f){receivers.push(f);},postMessage(s){sent.push(JSON.parse(s));}}}},setTimeout(){return 1;},clearTimeout(){},setInterval(f,ms){timers.push({f,ms});return timers.length;}});
+const run=s=>vm.runInContext(s,context),tick=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
+function reply(q,data,ok=true){assert.ok(q);receivers.forEach(f=>f({data:ok?{id:q.id,ok,data}:{id:q.id,ok,error:data}}));}
+async function click(id,dataset={}){const b=el(id);b.dataset=dataset;for(const f of handlers.click||[])f({target:b,preventDefault(){}});await tick();}
+const ops=op=>sent.filter(q=>q.op===op),last=op=>ops(op).at(-1);
+const profile={id:'source-123456789',name:'<VM & one>',ssh_host:'ops<&>.example',ssh_port:22,user:'operator',remote_port:18767,environment:'default',binding_mode:'manual_terminal',status:'disconnected',agent_count:0};
+const listing=extra=>({available:true,profiles:[profile],suggested_export_path:'C:\\private\\xshell_agent.js',...extra});
+async function list(extra){await click('remote-xshell');reply(last('reverseList'),listing(extra));await tick();}
+(async()=>{
+ run(source);reply(last('snapshot'),{sessions:[],jobs:[],grants:[],read_only:false});await tick();
+ assert.equal(ops('reverseList').length,0,'page load does not access reverse SSH');
+ await list({available:false,reason:'仅操作员可用 <denied>'});
+ assert.match(el('reverse-reason').textContent,/仅操作员/);assert.equal(el('reverse-new').disabled,true);
+ const denied=sent.length;await click('reverse-new');await click('fake',{reverseAction:'connect',reverseId:profile.id});assert.equal(sent.length,denied);
+ await list();assert.match(el('reverse-profiles').innerHTML,/&lt;VM &amp; one&gt;/);assert.match(el('reverse-profiles').innerHTML,/ops&lt;&amp;&gt;\.example/);assert.ok(!el('reverse-profiles').innerHTML.includes('<VM'));
+ assert.match(el('modal-body').innerHTML,/id="reverse-form" hidden/);
+ await click('reverse-new');
+ for(const [k,v] of Object.entries({name:'saved',host:'ops.example',port:'22',user:'operator',key:'C:\\keys\\a',known:'C:\\ssh\\known_hosts',remote:'18767',environment:'default'}))el('reverse-'+k).value=v;
+ await click('reverse-save');assert.equal(last('reverseAdd').ssh_host,'ops.example');assert.equal(last('reverseAdd').ssh_port,22);assert.equal(last('reverseAdd').binding_mode,'manual_terminal');assert.equal(ops('reverseConnect').length,0);reply(last('reverseAdd'),{profile_id:profile.id});await tick();reply(last('reverseList'),listing());await tick();assert.equal(ops('reverseConnect').length,0);
+ assert.match(el('reverse-profiles').innerHTML,/GB18030/);
+ el('encoding-'+profile.id).value='gbk';el('encoding-'+profile.id).dataset={encodingId:profile.id};for(const h of handlers.change||[])h({target:el('encoding-'+profile.id)});
+ await click('encoding',{reverseAction:'encoding',reverseId:profile.id});assert.equal(last('reverseEncodingSave').log_encoding,'gbk');reply(last('reverseEncodingSave'),{saved:true});await tick();reply(last('reverseList'),listing());await tick();
+ await click('connect',{reverseAction:'connect',reverseId:profile.id});await click('connect',{reverseAction:'connect',reverseId:profile.id});assert.equal(ops('reverseConnect').length,1);assert.equal(last('reverseConnect').profile_id,profile.id);reply(last('reverseConnect'),{});await tick();reply(last('reverseList'),listing({profiles:[{...profile,status:'awaiting_agent'}]}));await tick();assert.match(el('reverse-profiles').innerHTML,/SSH进程运行，等待脚本/);assert.match(el('reverse-profiles').innerHTML,/data-reverse-action="delete"[^>]*disabled/);
+ assert.ok(!sent.some(q=>/exec|job|connectionSwitch|integrationApply/i.test(q.op)));
+ await click('export',{reverseAction:'export',reverseId:profile.id});assert.equal(last('reverseChoosePath').kind,'export');await click('export',{reverseAction:'export',reverseId:profile.id});assert.equal(ops('reverseChoosePath').length,1);
+ reply(last('reverseChoosePath'),{path:'C:\\<private>&\\xshell_agent.js'});await tick();assert.equal(last('reverseExportPrepare').profile_id,profile.id);assert.equal(ops('reverseExportConfirm').length,0);
+ const preview={path:'C:\\<private>&\\xshell_agent.js',profile:'<VM>',source_id:profile.id,endpoint:'http://127.0.0.1:18767',environment:'default',warning:'do not share <secret>'};
+ reply(last('reverseExportPrepare'),{ticket:'once',expires:'2099',preview});await tick();assert.equal(run('modalKind'),'reverse-export');assert.match(el('modal-body').innerHTML,/&lt;private&gt;&amp;/);assert.doesNotMatch(el('modal-body').innerHTML,/Helper|TabManager/);assert.ok(!el('modal-body').innerHTML.includes('type="checkbox"'));
+ await click('reverse-export-confirm');await click('reverse-export-confirm');assert.equal(ops('reverseExportConfirm').length,1);reply(last('reverseExportConfirm'),{path:preview.path});await tick();await click('reverse-export-confirm');assert.equal(ops('reverseExportConfirm').length,1);
+ await list();await click('export',{reverseAction:'export',reverseId:profile.id});const picker=last('reverseChoosePath');await click('close',{close:''});reply(picker,{path:'ignored'});await tick();assert.equal(run('modalKind'),'');assert.equal(ops('reverseExportPrepare').length,1);
+ await list();await click('export',{reverseAction:'export',reverseId:profile.id});reply(last('reverseChoosePath'),{path:'chosen'});await tick();const stale=last('reverseExportPrepare');run("openModal('other','sentinel','','details')");reply(stale,{ticket:'stale',preview});await tick();assert.equal(el('modal-body').innerHTML,'sentinel');await click('reverse-export-confirm');assert.equal(ops('reverseExportConfirm').length,1);
+ await list();await click('export',{reverseAction:'export',reverseId:profile.id});reply(last('reverseChoosePath'),{path:'chosen'});await tick();const oldTarget=last('reverseExportPrepare');run('reverseProfiles=[]');reply(oldTarget,{ticket:'wrong-target',preview});await tick();assert.equal(run('reverseTicket'),null);
+ await list();await click('reverse-new');el('reverse-name').value='unfinished draft';const body=el('modal-body').innerHTML;const poll=timers.find(t=>t.ms===3000);assert.ok(poll);poll.f();await tick();reply(last('reverseList'),listing());await tick();assert.equal(el('modal-body').innerHTML,body);assert.equal(el('reverse-name').value,'unfinished draft');
+ const before=ops('reverseList').length;run('mutating=true');poll.f();await tick();assert.equal(ops('reverseList').length,before);run('mutating=false');await click('close',{close:''});poll.f();await tick();assert.equal(ops('reverseList').length,before);
+ await list();await click('export',{reverseAction:'export',reverseId:profile.id});
+ const beforeFailedConfirm=ops('reverseExportConfirm').length;
+ reply(last('reverseChoosePath'),'选择保存路径失败（EXPORT_UNEXPECTED）：此阶段发生未分类异常。不会自动重试。',false);await tick();
+ assert.match(el('modal-error').textContent,/选择保存路径.*EXPORT_UNEXPECTED/);assert.equal(ops('reverseExportConfirm').length,beforeFailedConfirm);
+ await click('export',{reverseAction:'export',reverseId:profile.id});reply(last('reverseChoosePath'),{path:'C:\\<private>&\\xshell_agent.js'});await tick();
+ const diagnostic='准备导出预览失败（EXPORT_ACCESS_DENIED）：文件访问或私有 ACL 设置被拒绝。\n所选路径：C:\\<private>&\\xshell_agent.js\n不会自动重试。';
+ reply(last('reverseExportPrepare'),diagnostic,false);await tick();assert.equal(el('modal-error').textContent,diagnostic);assert.equal(run('modalKind'),'reverse');assert.equal(run('reverseTicket'),null);assert.equal(ops('reverseExportConfirm').length,beforeFailedConfirm);
+ const afterFailedPrepare=sent.length;await tick();assert.equal(sent.length,afterFailedPrepare,'preflight error must not retry');
+ run('state.read_only=true');await list();assert.equal(el('reverse-new').disabled,true);const readonly=sent.length;await click('fake',{reverseAction:'connect',reverseId:profile.id});await click('reverse-save');assert.equal(sent.length,readonly);
+ console.log('PASS: actual inline reverse SSH events, lifecycle, tickets and stale responses');
+})().catch(e=>{console.error(e);process.exitCode=1;});

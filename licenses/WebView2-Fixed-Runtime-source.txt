@@ -1,0 +1,2 @@
+https://developer.microsoft.com/microsoft-edge/api/eula/webview2?locale=en-us&fixed=true
+Retrieved: 2026-11-05

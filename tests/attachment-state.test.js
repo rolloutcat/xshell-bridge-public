@@ -1,0 +1,11 @@
+const assert=require('node:assert/strict');
+const {attachmentStatus}=require('../desktop/attachment-state.js');
+assert.equal(attachmentStatus([],false).kind,'unavailable');
+assert.equal(attachmentStatus([{state:'active'}],false).kind,'unavailable');
+assert.equal(attachmentStatus([],true).kind,'missing');
+assert.equal(attachmentStatus([{state:'pending'}],true).kind,'pending');
+assert.equal(attachmentStatus([{state:'active'}],true).kind,'active');
+assert.equal(attachmentStatus([{state:'expired'},{state:'detached'},{state:'blocked'}],true).kind,'missing');
+assert.equal(attachmentStatus([{state:'active'},{state:'expired'}],true).kind,'active');
+assert.equal(attachmentStatus([{state:'active'},{state:'pending'}],true).kind,'pending');
+console.log('PASS: attachment guidance distinguishes disconnected Bridge, missing agent, pending, active and historical sessions');

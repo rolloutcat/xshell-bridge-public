@@ -1,0 +1,14 @@
+/dist/
+/runtime/
+*.exe
+*.test
+*.log
+__pycache__/
+*.pyc
+*.local.json
+.venv/
+.idea/
+.vscode/
+.env
+.env.*
+!.env.example

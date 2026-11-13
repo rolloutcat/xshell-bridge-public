@@ -1,0 +1,73 @@
+name: verify
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.3'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: go vet . ./cmd/... ./internal/...
+      - run: go test . ./cmd/... ./internal/...
+      - if: runner.os == 'Linux'
+        run: go test -race . ./cmd/... ./internal/...
+      - run: python -m unittest discover -s tests -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node tests/attachment-state.test.js
+      - run: node tests/log_parser.test.js
+      - run: node tests/capture.test.js
+      - run: node tests/desktop-ui.test.js
+      - run: node tests/desktop-management.test.js
+      - run: node tests/desktop-approvals.test.js
+      - run: node tests/desktop-followthrough.test.js
+      - run: node tests/desktop-removal.test.js
+      - run: node tests/manual-only.test.js
+      - run: node tests/remote-agent.test.js
+      - run: node tests/desktop-reverse.test.js
+      - run: node tests/desktop-local-agent.test.js
+      - run: go build -o xshctl.exe ./cmd/xshctl
+      - if: runner.os == 'Windows'
+        run: python scripts/smoke-startup.py --binary ./xshctl.exe
+      - run: python scripts/smoke.py --binary ./xshctl.exe
+      - if: runner.os == 'Windows'
+        run: python scripts/smoke-js.py --binary ./xshctl.exe
+      - if: runner.os == 'Windows'
+        run: python scripts/smoke-reverse.py --binary ./xshctl.exe
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./scripts/test-local-agent-native.ps1
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./scripts/build-desktop.ps1
+          python scripts/smoke-desktop.py --binary ./xshctl.exe --driver dist/xshell-desktop/IntegrationDriver.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bundle = Join-Path $env:RUNNER_TEMP 'portable-test-bundle'
+          New-Item -ItemType Directory -Path $bundle | Out-Null
+          Copy-Item xshctl.exe $bundle
+          Copy-Item agent/xshell_agent.js $bundle
+          Copy-Item agent/remote_bootstrap.js $bundle
+          Copy-Item agent/log_parser.js $bundle
+          Copy-Item agent/log_path_diagnostic.js $bundle
+          Copy-Item dist/xshell-desktop/XshLogCapture.exe $bundle
+          New-Item -ItemType Directory -Path (Join-Path $bundle 'docs') | Out-Null
+          Copy-Item docs/approval-policy.md,docs/opskat-comparison.md -Destination (Join-Path $bundle 'docs')
+          powershell -NoProfile -ExecutionPolicy RemoteSigned -File scripts/test-portable.ps1 -BundleRoot $bundle
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          powershell -NoProfile -ExecutionPolicy RemoteSigned -File scripts/test-launcher-defaults.ps1 -BundleRoot $bundle
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

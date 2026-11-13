@@ -1,0 +1,8 @@
+# Prefer the desktop Codex integration preview to populate a dedicated user token variable.
+# Replace the URL with the numeric-loopback endpoint of your own client.json.
+# Fully exit and restart Codex after changing user environment variables.
+[mcp_servers.xshell-bridge]
+url = 'http://127.0.0.1:18765/mcp'
+bearer_token_env_var = 'XSHELL_BRIDGE_TOKEN_EXAMPLE'
+startup_timeout_sec = 15
+tool_timeout_sec = 40

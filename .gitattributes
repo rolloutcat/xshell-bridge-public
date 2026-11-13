@@ -1,0 +1,5 @@
+* text=auto eol=lf
+*.exe -text
+*.zip -text
+# Preserve the downloaded vendor license byte-for-byte.
+licenses/WebView2-Fixed-Runtime.html -text -whitespace

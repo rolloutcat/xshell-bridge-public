@@ -1,0 +1,10 @@
+'use strict';
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const html=fs.readFileSync('desktop/app.html','utf8');
+const source=html.slice(html.indexOf('function processStatusRows('),html.indexOf('async function refreshProcesses('));
+const ctx=vm.createContext({esc:v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))});vm.runInContext(source,ctx);
+const report={available:true,truncated:false,note:'<img src=x onerror=alert(1)>',processes:['bridge','mcp','cli','unknown'].map((role,i)=>({pid:i+1,parent_pid:20,parent_status:['alive','exited','unknown','unknown'][i],role}))};
+const output=ctx.processStatusRows(report);for(const label of ['后台服务（Bridge）','客户端连接（MCP）','短时命令行（CLI）','未知角色','父进程编号：20','父进程状态：已退出','&lt;img'])assert.ok(output.includes(label),label);assert.ok(!output.includes('<img'));
+for(const bad of [null,{}, {...report,processes:Array(513).fill(report.processes[0])},{...report,note:'x'.repeat(4097)},...['<script>','__proto__'].map(role=>({...report,processes:[{...report.processes[0],role}]})),{...report,processes:[{...report.processes[0],pid:'12'}]},{...report,processes:[{...report.processes[0],parent_status:'connected'}]}])assert.throws(()=>ctx.processStatusRows(bad));
+assert.ok(html.includes("rpc('processStatus')"));assert.ok(!html.includes("rpc('processStatus',"));
+console.log('PASS: actual inline process rendering, escaped content, strict bounded rows and Chinese roles');
