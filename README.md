@@ -18,7 +18,9 @@
 
 ## 从这里开始
 
-源码仓库：[rolloutcat/xshell-bridge-public](https://github.com/rolloutcat/xshell-bridge-public)。发行文件发布到 [Releases](https://github.com/rolloutcat/xshell-bridge-public/releases)。Windows x64 用户选择 full 便携 ZIP，并使用同名 `.sha256` 校验文件核对下载；例如运行 `Get-FileHash .\xshell-bridge-portable-windows-x64-full.zip -Algorithm SHA256`。源码构建步骤见[验证与交付](docs/validation.md#源码验证与构建)。
+源码仓库：[rolloutcat/xshell-bridge-public](https://github.com/rolloutcat/xshell-bridge-public)。发行文件发布到 [Releases](https://github.com/rolloutcat/xshell-bridge-public/releases)。Windows x64 用户下载 lite 包，并使用同名 `.sha256` 文件核对下载；例如运行 `Get-FileHash .\xshell-bridge-portable-windows-x64-lite.zip -Algorithm SHA256`。源码构建步骤见[验证与交付](docs/validation.md#源码验证与构建)。
+
+公开发行仅提供 **Windows x64 lite 包**，**不包含 Microsoft Edge WebView2 Runtime**，需要运行机器已安装 Evergreen Runtime 和 .NET Framework 4.8。安装与检测说明见[使用指南](docs/user-guide.md#运行要求与-lite-包)。
 
 首次使用请按[使用指南](docs/user-guide.md)完成启动、终端接入和任务操作。后续按需要查阅以下文档；每项内容只在对应文档维护。
 

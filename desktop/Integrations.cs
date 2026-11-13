@@ -266,7 +266,7 @@ public sealed class Integrations {
         string source = component == "skill" ? Path.Combine(bundle, "skills", "xshctl", "SKILL.md") : "";
         string target = component == "skill" ? Path.Combine(home, ".agents", "skills", "xshctl", "SKILL.md") : "";
         var files = component == "skill" ? SkillPaths.Select(name => new { source = SkillSource(name), target = SkillTarget(name) }).ToArray() : new[] { new { source = "", target = "" } }.Take(0).ToArray();
-        return new { component = component, commands = commands.ToArray(), copy_source = source, copy_target = target, files = files, config_path = config, notice = "只读手动说明。HTTP MCP 复用工作台 Bridge；命令中的凭据环境变量需从 client.json 配置为当前用户环境变量，值不在此显示。建议使用预览安装完成配置，再完全退出并重新启动 Codex。普通 CLI 执行完即退出。" };
+        return new { component = component, commands = commands.ToArray(), copy_source = source, copy_target = target, files = files, config_path = config, notice = "只读手动说明。HTTP MCP 复用工作台 Bridge；命令中的凭据环境变量需从 client.json 配置为当前用户环境变量，值不在此显示。建议使用预览安装完成配置，再完全退出并重新启动对应 AI 客户端。普通 CLI 执行完即退出。" };
     }
     public object Status() {
         lock (sync) {
@@ -291,7 +291,7 @@ public sealed class Integrations {
             }
             string builtinStatus;
             try { builtinStatus = FileHash(Cli) == "absent" ? "missing" : "bundled"; } catch { builtinStatus = "missing"; }
-            return new { builtin_cli = new { path = Cli, version = Version, version_source = "declared-bundled-version", status = builtinStatus }, components = rows, managed_root = managed, config_path = config, skill_path = Path.Combine(home, ".agents", "skills", "xshctl"), notice = "MCP 通过 HTTP 复用工作台 Bridge，新对话无需启动常驻 xshctl。安装或迁移会同步当前用户的专用凭据环境变量；完成后请完全退出并重新启动 Codex。工作台需保持打开，关闭时 Bridge 一起停止。普通 CLI 执行完即退出。" };
+            return new { builtin_cli = new { path = Cli, version = Version, version_source = "declared-bundled-version", status = builtinStatus }, components = rows, managed_root = managed, config_path = config, skill_path = Path.Combine(home, ".agents", "skills", "xshctl"), notice = "MCP 通过 HTTP 复用工作台 Bridge，新对话无需启动常驻 xshctl。安装或迁移会同步当前用户的专用凭据环境变量；完成后请完全退出并重新启动对应 AI 客户端。工作台需保持打开，关闭时 Bridge 一起停止。普通 CLI 执行完即退出。" };
         }
     }
     string Snapshot(string component) {
@@ -340,7 +340,7 @@ public sealed class Integrations {
                 string target = SkillTarget(name); byte[] content = action == "uninstall" ? File.ReadAllBytes(target) : sources[target];
                 return new SkillFile { source = SkillSource(name), target = target, sha256 = Hash(content), content = SkillText(name, content) };
             }).ToArray() : new SkillFile[0];
-            return new PreviewResult { notice = component=="mcp" ? "本次同步 HTTP 接入与当前用户凭据环境变量；不会显示令牌。完成后完全退出并重新启动 Codex。" : "仅同步 Skill 文件。", ticket = ticket, action = action, component = component, source_hash = snapshot, config_path = config, expires = expires.ToString("o"), paths = paths.Concat(new[] { Manifest(component) }).ToArray(), files = files, commands = Commands(action, component).Select(a => "codex " + String.Join(" ", a.Select(Quote))).ToArray() };
+            return new PreviewResult { notice = component=="mcp" ? "本次同步 HTTP 接入与当前用户凭据环境变量；不会显示令牌。完成后完全退出并重新启动对应 AI 客户端。" : "仅同步 Skill 文件。", ticket = ticket, action = action, component = component, source_hash = snapshot, config_path = config, expires = expires.ToString("o"), paths = paths.Concat(new[] { Manifest(component) }).ToArray(), files = files, commands = Commands(action, component).Select(a => "codex " + String.Join(" ", a.Select(Quote))).ToArray() };
         }
     }
     static void AtomicWrite(string path, byte[] bytes) {

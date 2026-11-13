@@ -248,7 +248,7 @@ namespace XshellDesktop
             catch (WebView2RuntimeNotFoundException)
             {
                 FailInitialization(
-                    "缺少 WebView2 运行时。请使用附带 WebView2Runtime 目录的完整便携包，或使用机器已有的微软 WebView2 Runtime。");
+                    "未检测到 Microsoft Edge WebView2 Runtime。lite 包不包含运行时，请安装微软 WebView2 Evergreen Runtime；离线机器可使用微软提供的独立安装包。");
             }
             catch (Exception)
             {

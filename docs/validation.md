@@ -14,7 +14,7 @@ go vet . ./cmd/... ./internal/...
 python -m unittest discover -s tests -v
 ```
 
-使用显式源码包范围，避免 `go test ./...` 递归枚举本地私有 runtime 或构建目录。完整构建入口为 `./scripts/build.ps1 -IncludeExternalTests`，可用 `-GoExe` 指定 Go；它运行 Go/Python 检查并调用便携构建，后者还运行 C#、归档和导入夹具。`-IncludeExternalTests` 额外启用桌面 Node 与远程脚本事件测试，布局脚本仍需单独运行。`-SystemWebViewOnly` 生成依赖系统 WebView2 的 lite 包；默认 full 包包含固定运行时。构建可能下载依赖并重写通用 ZIP 文件，先保存需保留的旧包。
+使用显式源码包范围，避免 `go test ./...` 递归枚举本地私有 runtime 或构建目录。公开 lite 包构建入口为 `./scripts/build.ps1 -SystemWebViewOnly -IncludeExternalTests`，可用 `-GoExe` 指定 Go；它运行 Go/Python 检查并调用便携构建，后者还运行 C#、归档和导入夹具。`-IncludeExternalTests` 额外启用桌面 Node 与远程脚本事件测试，布局脚本仍需单独运行。公开发行仅提供依赖系统 WebView2 Runtime 的 lite 包，构建时必须传入 `-SystemWebViewOnly`；源码仍保留未传此参数时的 full 构建能力，该产物不列入公开发行附件。构建可能下载依赖并重写通用 ZIP 文件，先保存需保留的旧包。
 
 ## 交付核对
 

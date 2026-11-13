@@ -6,7 +6,17 @@
 
 ## 启动工作台
 
-在解压后的 Windows x64 便携包中运行 `Start.cmd`。它由打包脚本生成，源码仓库不直接提供此启动文件。full 包包含固定 WebView2 运行时，lite 包依赖系统 WebView2；运行 Xshell 的 Windows 机器需要 .NET Framework 4.8。
+在解压后的 Windows x64 便携包中运行 `Start.cmd`。它由打包脚本生成，源码仓库不直接提供此启动文件。工作台及日志采集 helper 需要 .NET Framework 4.8。
+
+### 运行要求与 lite 包
+
+公开发行仅提供 lite 包：**不包含 WebView2 Runtime**，需要工作台所在 Windows 机器已安装 Microsoft Edge WebView2 Evergreen Runtime 和 .NET Framework 4.8。包内保留调用 WebView2 所需的 SDK 库和 loader，并非完全不依赖 WebView2。
+
+根据[微软的分发说明](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution)，Windows 11 预装 Evergreen Runtime，绝大多数 Windows 10 设备也已有，但不能假定所有机器都有。精简镜像、受管或离线设备应实际检查；仅安装 Edge 浏览器不能证明运行时可用。
+
+可在 Windows 已安装应用中查找 **Microsoft Edge WebView2 Runtime**。若找不到或启动提示缺少运行时，由用户从[微软官方下载页](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)安装 Evergreen Runtime；离线环境使用对应架构的 Standalone Installer。本工具不自动下载安装系统运行时。
+
+### 启动与数据目录
 
 默认数据目录为 `%LOCALAPPDATA%\XshellBridge-local`，其中 `runtime` 保存私有配对、任务和输出。启动脚本 `scripts/start-desktop.ps1` 可通过 `-DataRoot` 指定其他数据根目录。同一运行目录只允许一个工作台；已有后台只有通过认证健康检查、程序路径和退出能力核验后才能由工作台接管。打开新包不会自动替换旧后台，跨版本切换请使用[更新交接流程](maintenance.md#程序更新)。
 
@@ -98,7 +108,7 @@ HTTP MCP 复用工作台的 Bridge，多对话不需要另启常驻 CLI。AI 客
 
 ### 工作台内置的自动配置
 
-当前界面中的“Codex 接入”是可选的 **Codex 专用自动配置适配器**，不是所有 AI 客户端的通用安装器。它可检查、预览 MCP 和 Skill 的安装、更新或卸载；其他 AI 客户端按上面的方式手动配置，不能直接使用此入口替它们写配置。
+工作台“AI 接入”默认展示通用接入信息，本机路径与检测详情默认折叠；路径由当前用户和运行目录生成，并非发行包写死的开发者目录。“客户端自动配置（可选）”当前使用 **Codex 专用适配器**，不是所有 AI 客户端的通用安装器。它可检查、预览 MCP 和 Skill 的安装、更新或卸载；其他 AI 客户端按上面的方式手动配置，不能直接使用此入口替它们写配置。
 
 该适配器由用户确认后执行，保留未知或被用户修改的配置。安装或迁移把 client 配对令牌写入按配置路径区分的当前用户环境变量 `XSHELL_BRIDGE_TOKEN_<标识>`，客户端配置只记录变量名；预览与日志不显示令牌。卸载只删除归属已核对的变量。安装、迁移或令牌变更后，完全退出并重新启动对应客户端以加载用户环境；工作台需要保持打开。
 

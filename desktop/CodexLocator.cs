@@ -28,7 +28,7 @@ public sealed class CodexLocator {
         try { return Path.GetFullPath(value); } catch { return null; }
     }
     bool Exists(string path) { try { return exists(path); } catch { return false; } }
-    static Result Found(string path, string source) { return new Result { path = path, source = source, status = "found", detail = "已检测到 Codex 执行入口。" }; }
+    static Result Found(string path, string source) { return new Result { path = path, source = source, status = "found", detail = "已找到当前适配器的客户端执行程序。" }; }
     public Result Locate() {
         string path = null;
         try { path = pathDiscovery(); } catch { }

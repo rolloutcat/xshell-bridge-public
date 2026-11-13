@@ -168,8 +168,11 @@ def run(binary):
         shutil.copy2(binary, bundle / 'xshctl.exe')
         shutil.copy2(source / 'scripts/start-desktop.ps1', bundle / 'scripts/start-desktop.ps1')
         require((bundle / 'scripts/start-desktop.ps1').read_bytes().startswith(b'\xef\xbb\xbf'), 'launcher must have UTF-8 BOM for PS5.1')
-        for name in ('xshell_agent.js', 'remote_bootstrap.js'):
+        for name in ('xshell_agent.js', 'remote_bootstrap.js', 'log_parser.js'):
             shutil.copy2(source / 'agent' / name, bundle / name)
+        subprocess.run([str(compiler), '/nologo', '/target:winexe', '/r:System.Web.Extensions.dll',
+                        '/out:' + str(bundle / 'XshLogCapture.exe'), str(source / 'agent/LogCapture.cs')],
+                       check=True, capture_output=True, timeout=30)
         marker = base / 'desktop-count.txt'
         cs = base / 'FakeDesktop.cs'
         cs.write_text('using System; using System.IO; class FakeDesktop { static void Main(string[] args) { File.AppendAllText(Environment.GetEnvironmentVariable("XSH_STARTUP_MARKER"), String.Join(" ", args) + Environment.NewLine); } }', encoding='utf-8-sig')
