@@ -146,7 +146,7 @@ def run(binary):
             mcp.stdin.write('{"jsonrpc":"2.0","method":"notifications/initialized"}\n')
             mcp.stdin.flush()
             tools = rpc("tools/list", {})["tools"]
-            assert {t["name"] for t in tools} == {"list_sessions", "resolve_session", "explain_command", "exec", "get_job", "wait_job", "read_output", "interrupt_job", "detach_session"}
+            assert {t["name"] for t in tools} == {"get_command_policy", "list_sessions", "resolve_session", "explain_command", "exec", "get_job", "wait_job", "read_output", "interrupt_job", "detach_session"}
             explain_tool = next(t for t in tools if t['name'] == 'explain_command')
             assert explain_tool['annotations']['readOnlyHint'] is True
             required = set(explain_tool['inputSchema']['required'])
