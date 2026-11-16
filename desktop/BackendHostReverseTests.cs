@@ -257,11 +257,39 @@ internal static class BackendHostReverseTests {
             Check(!(bool)listed["available"] && ((object[])listed["profiles"]).Length == 0, "unavailable list exposed profiles");
             f.Request(new { id = 1, op = "reverseAdd", name = "x", ssh_host = "host", ssh_port = 22, user = "u", key_path = f.Key, known_hosts_path = f.Known, remote_port = 18000, environment = "", binding_mode = "manual_terminal" }, false);
             f.Request(new { id = 1, op = "reverseConnect", profile_id = new string('b', 32) }, false);
+            f.Request(new { id = 1, op = "reverseEdit", profile_id = new string('b', 32) }, false);
+            f.Request(new { id = 1, op = "reverseUpdate", profile_id = new string('b', 32), name = "changed", ssh_host = "changed.example", ssh_port = 22, user = "operator", key_path = f.Key, known_hosts_path = f.Known, remote_port = 18888, environment = "test", log_encoding = "auto" }, false);
             f.Request(new { id = 1, op = "reverseDisconnect", profile_id = new string('b', 32) }, false);
             f.Request(new { id = 1, op = "reverseDelete", profile_id = new string('b', 32) }, false);
             f.Request(new { id = 1, op = "reverseExportPrepare", profile_id = new string('b', 32), path = Path.Combine(f.Root, "denied.js") }, false);
             f.Request(new { id = 1, op = "reverseChoosePath", kind = "key" }, false);
             Check(f.Calls.Count == 0 && f.Dialogs == 0 && f.Processes.Count == 0, "denied operation performed I/O");
+        }
+        using (var f = new Fixture()) {
+            string id = f.Add();
+            string path = Path.Combine(f.Root, "edit-export.js"), ticket = f.Prepare(id, path);
+            string catalog = Path.Combine(f.Root, "catalog", "host-reverse.json");
+            var edit = Map(f.Request(new { id = 1, op = "reverseEdit", profile_id = id }, true)["data"]);
+            Check((string)edit["key_path"] == f.Key && (string)edit["known_hosts_path"] == f.Known, "edit paths not loaded");
+            Action<string, bool> update = delegate(string host, bool ok) { f.Request(new { id = 1, op = "reverseUpdate", profile_id = id, name = "Edited", ssh_host = host, ssh_port = 2222, user = "newuser", key_path = f.Key, known_hosts_path = f.Known, remote_port = 18889, environment = "edited", log_encoding = "gbk" }, ok); };
+            string before = File.ReadAllText(catalog);
+            update("-oProxyCommand=x", false); Check(File.ReadAllText(catalog) == before, "invalid edit changed catalog");
+            f.Request(new { id = 1, op = "reverseConnect", profile_id = id }, true);
+            update("edited.example", false); Check(File.ReadAllText(catalog) == before && f.Processes.Count == 1 && !f.Processes[0].Exited, "active edit changed connection");
+            f.Request(new { id = 1, op = "reverseDisconnect", profile_id = id }, true);
+            ticket = f.Prepare(id, path);
+            File.Delete(Path.Combine(f.Runtime, "client.json")); File.Delete(Path.Combine(f.Runtime, "agent.json"));
+            update("edited.example", true);
+            Check(f.Processes.Count == 1, "edit launched SSH");
+            var saved = f.ListedProfile();
+            Check((string)saved["id"] == id && (string)saved["ssh_host"] == "edited.example" && (int)saved["ssh_port"] == 2222 && (int)saved["remote_port"] == 18889 && (string)saved["log_encoding"] == "gbk" && (string)saved["status"] == HostReverse.Disconnected, "edit did not replace existing profile");
+            using (var reopened = new HostReverse(Path.Combine(f.Root, "catalog"), f.Bundle, f.Runtime)) {
+                Check(reopened.List().Count == 1 && reopened.Get(id).ssh_host == "edited.example" && reopened.Get(id).environment == "edited", "edit not persisted in original row");
+            }
+            f.WriteConfig("client.json", 17890, 'c'); f.WriteConfig("agent.json", 17890, 'a');
+            f.Request(new { id = 1, op = "reverseExportConfirm", ticket = ticket }, false); Check(!File.Exists(path), "edit kept stale export confirmation");
+            f.Request(new { id = 1, op = "reverseConnect", profile_id = id }, true);
+            Check(f.Processes.Count == 2, "explicit reconnect failed");
         }
         using (var f = new Fixture()) {
             string id = f.Add();

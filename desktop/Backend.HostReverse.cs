@@ -163,6 +163,19 @@ public sealed partial class Backend {
         switch (operation) {
         case "reverseList":
             Fields(request); return await ReverseList().ConfigureAwait(false);
+        case "reverseEdit":
+            Fields(request, "profile_id"); RequireReverseContext();
+            return ReverseManager().ReadSettings(ReverseID(request));
+        case "reverseUpdate": {
+            Fields(request, "profile_id", "name", "ssh_host", "ssh_port", "user", "key_path", "known_hosts_path", "remote_port", "environment", "log_encoding");
+            RequireReverseContext();
+            string id = ReverseID(request), name = TextField(request, "name"), host = TextField(request, "ssh_host"), user = TextField(request, "user");
+            string key = TextField(request, "key_path"), known = TextField(request, "known_hosts_path"), environment = TextField(request, "environment"), encoding = TextField(request, "log_encoding");
+            int port = Number(request, "ssh_port"), remotePort = Number(request, "remote_port");
+            InvalidateReviews();
+            ReverseManager().Update(id, name, host, port, user, key, known, remotePort, environment, encoding);
+            return new { saved = true };
+        }
         case "reverseAdd": {
             Fields(request, "name", "ssh_host", "ssh_port", "user", "key_path", "known_hosts_path", "remote_port", "environment", "binding_mode", "log_encoding");
             RequireReverseContext();

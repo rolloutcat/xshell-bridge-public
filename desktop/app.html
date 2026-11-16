@@ -261,7 +261,7 @@ document.addEventListener('change',e=>{const id=e.target.dataset?.batchId;if(!id
 document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b||mutating)return;if(b.id==='apply-template'&&modalKind==='rule-editor'){const value=$('command-template').value;if(value==='')return;const t=commandTemplates[Number(value)];if(!t)return;const [p,a]=t;for(const [key,value] of Object.entries({name:[p,...a].join(' '),program:p,patterns:a.map(literalPattern).join('\n'),cwd:'/',timeout:'15',minutes:'30'}))$('rule-'+key).value=value;}if(b.hasAttribute('data-batch-return')){const controls=$('batch-controls');controls?.scrollIntoView({block:'start'});controls?.focus({preventScroll:true});return;}if(b.dataset.explain)return explainJob(b.dataset.explain);if(b.id==='batch-select'&&decisionReady()&&state.supports_batch){for(const j of visiblePending()){if(batchSelection.size>=20)break;if(!spentDecisions.has(j.id)&&approvalSession(j)){batchSelection.add(j.id);batchBindings.set(j.id,approvalBinding(j,approvalSession(j)));}}viewVersion='';render();}if(b.id==='batch-clear'){batchSelection.clear();batchBindings.clear();viewVersion='';render();}if(b.dataset.batchAction){if(e.detail>1)return;return prepareBatch(b.dataset.batchAction,e);}});
 const approvalOpenJob=openJob;openJob=function(j,bound){approvalOpenJob(j,bound);if(j)$('modal-actions').innerHTML+=explainButton(j.id);};
 /* Reverse SSH is independent of desktop connection profiles and MCP configuration. */
-let reverseProfiles=[],reverseAvailable=false,reverseBusy=false,reverseTicket=null,reverseRequest=0,reverseEncodingDraft={};
+let reverseProfiles=[],reverseAvailable=false,reverseBusy=false,reverseTicket=null,reverseRequest=0,reverseEncodingDraft={},reverseEditingId=null;
 const encodingChoices=[['auto','自动（BOM / UTF-8）'],['utf-8','UTF-8'],['utf-16le','UTF-16LE'],['utf-16be','UTF-16BE'],['gbk','GBK (CP936)'],['gb18030','GB18030']];
 function encodingOptions(value){return encodingChoices.map(([v,label])=>`<option value="${v}" ${v===value?'selected':''}>${label}</option>`).join('');}
 let localBusy=false,localTicket=null,localState=null,localRequest=0;
@@ -309,8 +309,8 @@ function reverseAllowed(){return modalKind==='reverse'&&reverseAvailable&&!state
 function reverseControls(){
  if(modalKind!=='reverse')return;
  const disabled=!reverseAvailable||state.read_only||mutating||reverseBusy;
- for(const id of ['reverse-new','reverse-save','reverse-browse-key','reverse-browse-known']){const b=$(id);if(b)b.disabled=disabled;}
- document.querySelectorAll('#reverse-profiles button').forEach(b=>{const p=reverseProfiles.find(p=>p.id===b.dataset.reverseId);b.disabled=disabled||!p||(b.dataset.reverseAction==='delete'&&p.status==='awaiting_agent');});
+ for(const id of ['reverse-new','reverse-save','reverse-cancel','reverse-browse-key','reverse-browse-known']){const b=$(id);if(b)b.disabled=disabled;}
+ document.querySelectorAll('#reverse-profiles button').forEach(b=>{const p=reverseProfiles.find(p=>p.id===b.dataset.reverseId);b.disabled=disabled||!p||(['edit','delete'].includes(b.dataset.reverseAction)&&p.status==='awaiting_agent');});
 }
 function reverseRows(){
  const disabled=!reverseAvailable||state.read_only||mutating||reverseBusy;
@@ -318,7 +318,7 @@ function reverseRows(){
   const running=p.status==='awaiting_agent',seen=typeof p.last_seen==='number'?p.last_seen:Date.parse(p.last_seen),age=Date.now()-seen;
   const fresh=Number(p.agent_count)>0&&Number.isFinite(age)&&age>=0&&age<=15000&&!['unknown','stale','expired','offline','disconnected'].includes(p.agent_status);
   const label=running?(fresh?'已连接 · SSH进程运行，脚本心跳新鲜':Number(p.agent_count)>0?'SSH进程运行，脚本心跳未确认':'SSH进程运行，等待脚本'):p.status==='exited'?'SSH进程已退出':'未连接';
-  return `<article class="reverse-card"><b>${esc(p.name)}</b> <span class="tag ${running&&fresh?'green':'amber'}">${esc(label)}</span><p>${esc(p.user)}@${esc(p.ssh_host)}:${esc(p.ssh_port)} · 远端回环端口 ${esc(p.remote_port)}</p><p>分组：${esc(p.environment)} · 模式：${esc(p.binding_mode==='manual_terminal'?'逐终端手动接入':'旧配置：请先导出新脚本')}</p><label>日志编码 <select id="encoding-${esc(p.id)}" data-encoding-id="${esc(p.id)}">${encodingOptions(reverseEncodingDraft[p.id]||p.log_encoding||'auto')}</select></label><button data-reverse-action="encoding" data-reverse-id="${esc(p.id)}" ${disabled?'disabled':''}>保存编码</button><p>Agent 心跳：${esc(p.agent_status||'未知')} · ${esc(p.agent_count||0)} 个 · 最近 ${esc(p.last_seen||'无')} · SSH退出码 ${esc(p.exit_code==null?'—':p.exit_code)}</p><details><summary>来源标识：${esc(String(p.id).slice(0,12))}…（展开查看完整标识）</summary><pre>${esc(p.id)}</pre></details><div class="actions">${[['connect','连接'],['disconnect','断开'],['export','导出脚本'],['delete','删除']].map(([a,text])=>`<button data-reverse-action="${a}" data-reverse-id="${esc(p.id)}" ${disabled||(a==='delete'&&running)?'disabled':''}>${text}</button>`).join('')}</div></article>`;
+  return `<article class="reverse-card"><b>${esc(p.name)}</b> <span class="tag ${running&&fresh?'green':'amber'}">${esc(label)}</span><p>${esc(p.user)}@${esc(p.ssh_host)}:${esc(p.ssh_port)} · 远端回环端口 ${esc(p.remote_port)}</p><p>分组：${esc(p.environment)} · 模式：${esc(p.binding_mode==='manual_terminal'?'逐终端手动接入':'旧配置：请先导出新脚本')}</p><label>日志编码 <select id="encoding-${esc(p.id)}" data-encoding-id="${esc(p.id)}">${encodingOptions(reverseEncodingDraft[p.id]||p.log_encoding||'auto')}</select></label><button data-reverse-action="encoding" data-reverse-id="${esc(p.id)}" ${disabled?'disabled':''}>保存编码</button><p>Agent 心跳：${esc(p.agent_status||'未知')} · ${esc(p.agent_count||0)} 个 · 最近 ${esc(p.last_seen||'无')} · SSH退出码 ${esc(p.exit_code==null?'—':p.exit_code)}</p><details><summary>来源标识：${esc(String(p.id).slice(0,12))}…（展开查看完整标识）</summary><pre>${esc(p.id)}</pre></details><div class="actions">${[['edit','编辑'],['connect','连接'],['disconnect','断开'],['export','导出脚本'],['delete','删除']].map(([a,text])=>`<button data-reverse-action="${a}" data-reverse-id="${esc(p.id)}" ${disabled||(['edit','delete'].includes(a)&&running)?'disabled':''}>${text}</button>`).join('')}</div></article>`;
  }).join('')||'<p class="fine">尚无保存的 VM 连接。</p>';
  reverseControls();
 }
@@ -331,14 +331,23 @@ async function reverseLoad(){
 }
 function showReverse(){
  if(mutating)return;
- reverseProfiles=[];reverseEncodingDraft={};
+ reverseProfiles=[];reverseEncodingDraft={};reverseEditingId=null;
  openModal('远程 Xshell',`<section aria-label="远程 Xshell 说明"><p class="notice">宿主机 Bridge 和所有审批始终留在本机。远程运维 VM 运行导出的单个 xshell_agent.js，需要 .NET Framework 4.8；无需安装 VM 服务、Bridge 或 PowerShell。此界面不会更改本机 Bridge 端点或 MCP 配置。</p><p><b>SSH host 是运行 Xshell 的远程机器 OpenSSH 入口。</b>请先保存配置，再显式连接；保存、打开页面和导出均不会自动连接。</p><p>关闭桌面会同时停止所属 Bridge 和 SSH 隧道。断开不会强制停止远端命令；心跳自然过期后结果可能未知。不自动重放或重连。断开或删除配置不会撤销已导出的凭据，请妥善保管脚本，勿公开分享。</p><details><summary>远程 SSH 一次性配置指引（人工操作）</summary><p>由管理员核对运维机现有 sshd 配置；如果已有 Match User，应在匹配用户的配置块内允许远程转发。保留原有 local 转发时使用 yes，否则可用 remote。以下仅示例，将用户名和端口替换为本配置值；不会自动运行命令，不关闭主机密钥校验。</p><pre>Match User YOUR_SSH_USER
     AllowTcpForwarding yes
     # 或 AllowTcpForwarding remote（不需要保留 local 时）
     PermitListen 127.0.0.1:18767
     GatewayPorts no
-    MaxSessions 0</pre><p>PermitListen 必须允许所选远端回环端口；DisableForwarding 应为 no。authorized_keys 中的 restrict、no-port-forwarding 或 permitlisten 限制也可能阻止转发，请核对。保留现有 PermitOpen 配置。MaxSessions 0 可以保持；本功能不需要远程 Shell 会话。</p></details><details><summary>Xshell 使用步骤</summary><ol><li>连接 SSH 隧道，导出并核对脚本元数据。</li><li>将导出的 xshell_agent.js 私密复制到远程机器，在每个最终目标的普通终端通过 Xshell「工具 → 脚本 → 运行」运行一次。</li><li>返回宿主机核对身份并激活。</li></ol><p>日志须为可打印文本，关闭时间戳、ANSI 和文件路径询问。默认自动识别 BOM 或无 BOM UTF-8；无 BOM UTF-16、GBK、GB18030 请在来源选择。任务运行时不要手工输入或切换目标。</p></details></section><section aria-label="保存的 VM 连接"><h3>保存的 VM 连接</h3><p id="reverse-reason" role="status">正在读取…</p><p class="fine">awaiting_agent 仅表示 SSH 进程存活，并非转发成功证明。UI 仅将最近 15 秒且未标记过期的 Agent 心跳视为新鲜；最终状态以本机审批和任务查询为准。</p><p class="fine">修改编码后需重新导出并运行脚本；自动识别 BOM 或无 BOM UTF-8。</p><div id="reverse-profiles"></div></section><section><button id="reverse-new" disabled>新增 VM 连接</button><div id="reverse-form" hidden><h3>新配置（保存不连接）</h3><div class="reverse-fields">${[['name','名称',''],['host','SSH host（运行 Xshell 的机器）',''],['port','SSH 端口','22'],['user','SSH 用户',''],['key','私钥绝对路径',''],['known','已核验的主机密钥文件（known_hosts）',''],['remote','远端回环端口','18767'],['environment','分组（留空使用连接名称）','']].map(([id,label,value])=>`<label>${label}<input id="reverse-${id}" value="${value}" ${['port','remote'].includes(id)?`type="number" min="${id==='remote'?1024:1}" max="65535"`:''}></label>`).join('')}</div><label>日志编码 <select id="reverse-encoding">${encodingOptions('auto')}</select></label><div class="actions"><button id="reverse-browse-key">浏览私钥路径</button><button id="reverse-browse-known">选择已核验的 known_hosts 文件</button><button id="reverse-save">保存（不连接）</button></div></div></section>`,'<button data-close>关闭</button>','reverse');
+    MaxSessions 0</pre><p>PermitListen 必须允许所选远端回环端口；DisableForwarding 应为 no。authorized_keys 中的 restrict、no-port-forwarding 或 permitlisten 限制也可能阻止转发，请核对。保留现有 PermitOpen 配置。MaxSessions 0 可以保持；本功能不需要远程 Shell 会话。</p></details><details><summary>Xshell 使用步骤</summary><ol><li>连接 SSH 隧道，导出并核对脚本元数据。</li><li>将导出的 xshell_agent.js 私密复制到远程机器，在每个最终目标的普通终端通过 Xshell「工具 → 脚本 → 运行」运行一次。</li><li>返回宿主机核对身份并激活。</li></ol><p>日志须为可打印文本，关闭时间戳、ANSI 和文件路径询问。默认自动识别 BOM 或无 BOM UTF-8；无 BOM UTF-16、GBK、GB18030 请在来源选择。任务运行时不要手工输入或切换目标。</p></details></section><section aria-label="保存的 VM 连接"><h3>保存的 VM 连接</h3><p id="reverse-reason" role="status">正在读取…</p><p class="fine">awaiting_agent 仅表示 SSH 进程存活，并非转发成功证明。UI 仅将最近 15 秒且未标记过期的 Agent 心跳视为新鲜；最终状态以本机审批和任务查询为准。</p><p class="fine">编辑或删除连接前请先断开隧道。修改编码后需重新导出并运行脚本；自动识别 BOM 或无 BOM UTF-8。</p><p id="reverse-feedback" role="status"></p><div id="reverse-profiles"></div></section><section><button id="reverse-new" disabled>新增 VM 连接</button><div id="reverse-form" hidden><h3 id="reverse-form-title">新配置（保存不连接）</h3><p class="fine">编辑已有连接前请先断开隧道。保存后需显式连接；修改远端回环端口、分组或日志编码后，需重新导出并运行脚本。</p><div class="reverse-fields">${[['name','名称',''],['host','SSH host（运行 Xshell 的机器）',''],['port','SSH 端口','22'],['user','SSH 用户',''],['key','私钥绝对路径',''],['known','已核验的主机密钥文件（known_hosts）',''],['remote','远端回环端口','18767'],['environment','分组（留空使用连接名称）','']].map(([id,label,value])=>`<label>${label}<input id="reverse-${id}" value="${value}" ${['port','remote'].includes(id)?`type="number" min="${id==='remote'?1024:1}" max="65535"`:''}></label>`).join('')}</div><label>日志编码 <select id="reverse-encoding">${encodingOptions('auto')}</select></label><div class="actions"><button id="reverse-browse-key">浏览私钥路径</button><button id="reverse-browse-known">选择已核验的 known_hosts 文件</button><button id="reverse-cancel">取消</button><button id="reverse-save">保存（不连接）</button></div></div></section>`,'<button data-close>关闭</button>','reverse');
  reverseLoad();
+}
+function reverseForm(p=null){
+ reverseEditingId=p?p.id:null;
+ const fields={name:p?.name||'',host:p?.ssh_host||'',port:p?.ssh_port||22,user:p?.user||'',key:p?.key_path||'',known:p?.known_hosts_path||'',remote:p?.remote_port||18767,environment:p?.environment||'',encoding:p?.log_encoding||'auto'};
+ for(const [key,value] of Object.entries(fields))$('reverse-'+key).value=String(value);
+ $('reverse-form-title').textContent=p?'编辑连接：'+p.name:'新配置（保存不连接）';
+ $('reverse-save').textContent=p?'保存修改（不连接）':'保存（不连接）';
+ $('reverse-form').hidden=false;$('modal-error').textContent='';$('reverse-feedback').textContent='';
+ $('reverse-form').scrollIntoView({block:'start'});$('reverse-name').focus();
 }
 function reverseSpec(){
  const value=id=>$('reverse-'+id).value.trim(),ssh_port=Number(value('port')),remote_port=Number(value('remote'));
@@ -348,14 +357,19 @@ function reverseSpec(){
 async function reverseOperate(b){
  if(!reverseAllowed())return;
  const action=b.dataset.reverseAction,id=b.dataset.reverseId,p=reverseProfiles.find(p=>p.id===id);
- if(action&&(!p||!['connect','disconnect','export','delete','encoding'].includes(action)||(action==='delete'&&p.status==='awaiting_agent')))return;
+ if(action&&(!p||!['edit','connect','disconnect','export','delete','encoding'].includes(action)||(['edit','delete'].includes(action)&&p.status==='awaiting_agent')))return;
  const current=reverseContext(),request=++reverseRequest,targetCurrent=()=>current()&&request===reverseRequest&&(!id||reverseProfiles.some(p=>p.id===id));
  let reload=false;reverseBusy=true;reverseControls();$('modal-error').textContent='';
  try{
-  if(b.id==='reverse-browse-key'||b.id==='reverse-browse-known'){
+  if(action==='edit'){
+   const settings=await rpc('reverseEdit',{profile_id:id});if(!targetCurrent())return;
+   if(settings.id!==id)throw Error('编辑配置标识不一致，请刷新后重试。');reverseForm(settings);
+  }else if(b.id==='reverse-browse-key'||b.id==='reverse-browse-known'){
    const key=b.id==='reverse-browse-key',r=await rpc('reverseChoosePath',{kind:key?'key':'known_hosts'});if(targetCurrent()&&r.path)$('reverse-'+(key?'key':'known')).value=r.path;
   }else if(b.id==='reverse-save'){
-   const spec=reverseSpec();await rpc('reverseAdd',spec);if(!targetCurrent())return;$('reverse-form').hidden=true;reload=true;
+   const spec=reverseSpec(),editing=reverseEditingId;if(editing){delete spec.binding_mode;spec.profile_id=editing;}
+   await rpc(editing?'reverseUpdate':'reverseAdd',spec);if(!targetCurrent())return;
+   if(editing)delete reverseEncodingDraft[editing];reverseEditingId=null;$('reverse-form').hidden=true;$('reverse-feedback').textContent='配置已保存，未自动连接。';reload=true;
   }else if(action==='encoding'){
    const encoding=reverseEncodingDraft[id]||p.log_encoding||'auto';await rpc('reverseEncodingSave',{profile_id:id,log_encoding:encoding});if(!targetCurrent())return;delete reverseEncodingDraft[id];reload=true;
   }else if(action==='export'){
@@ -384,7 +398,8 @@ document.addEventListener('click',e=>{
  if(b.id==='local-confirm'){localConfirm();return;}
  if(b.id==='remote-xshell'){showReverse();return;}
  if(b.id==='reverse-export-confirm'){reverseConfirmExport();return;}
- if(b.id==='reverse-new'){if(reverseAllowed())$('reverse-form').hidden=!$('reverse-form').hidden;return;}
+ if(b.id==='reverse-new'){if(reverseAllowed())reverseForm();return;}
+ if(b.id==='reverse-cancel'){if(reverseAllowed()){reverseEditingId=null;$('reverse-form').hidden=true;$('modal-error').textContent='';}return;}
  if(b.dataset.reverseAction||['reverse-save','reverse-browse-key','reverse-browse-known'].includes(b.id))reverseOperate(b);
 });
 setInterval(()=>{if(modalKind==='reverse'&&!mutating&&!reverseBusy)reverseLoad();},3000);

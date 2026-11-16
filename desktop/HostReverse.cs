@@ -223,6 +223,21 @@ public sealed class HostReverse : IDisposable {
         } catch { throw Failure(); } }
     }
     public ProfileStatus Get(string id) { lock (gate) { try { return Status(Find(id)); } catch { throw Failure(); } } }
+    // Explicit operator edit only. Paths are metadata; key contents and pairing credentials never cross IPC.
+    public object ReadSettings(string id) { lock (gate) { try {
+        var p = Find(id);
+        return new { id = p.id, name = p.name, ssh_host = p.sshHost, ssh_port = p.sshPort, user = p.user, key_path = p.keyPath, known_hosts_path = p.knownHostsPath, remote_port = p.remotePort, environment = p.environment, log_encoding = p.logEncoding };
+    } catch { throw Failure(); } } }
+    public void Update(string id, string name, string sshHost, int sshPort, string user, string keyPath, string knownHostsPath, int remotePort, string environment, string logEncoding) {
+        lock (gate) { try {
+            var rows = Load(); int index = rows.FindIndex(x => x.id == id); if (index < 0) throw Failure();
+            IReverseProcess process;
+            if (owned.TryGetValue(id, out process) && !process.HasExited) throw Failure();
+            var p = new Profile { id = id, name = name, sshHost = sshHost, sshPort = sshPort, user = user, keyPath = keyPath, knownHostsPath = knownHostsPath, remotePort = remotePort, environment = String.IsNullOrWhiteSpace(environment) ? name : environment, bindingMode = rows[index].bindingMode, logEncoding = logEncoding };
+            Validate(p); Existing(p.keyPath); Existing(p.knownHostsPath);
+            Release(id); rows[index] = p; Save(rows);
+        } catch { throw Failure(); } }
+    }
     public string Add(string name, string sshHost, int sshPort, string user, string keyPath, string knownHostsPath, int remotePort, string environment, string bindingMode, string logEncoding = "auto") {
         lock (gate) { try {
             var rows = Load(); var p = new Profile { id = Guid.NewGuid().ToString("N"), name = name, sshHost = sshHost, sshPort = sshPort, user = user, keyPath = keyPath, knownHostsPath = knownHostsPath, remotePort = remotePort, environment = String.IsNullOrWhiteSpace(environment) ? name : environment, bindingMode = bindingMode, logEncoding = logEncoding };

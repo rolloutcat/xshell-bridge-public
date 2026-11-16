@@ -24,7 +24,7 @@ assert.ok(nativeCompile && nativeCompile.includes("desktop\\HostReverseLifecycle
 let source=fs.readFileSync('desktop/app.html','utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
 for(const [marker,file] of [['/*__ATTACHMENT_STATE__*/','desktop/attachment-state.js'],['/*__UPDATES_UI__*/','desktop/updates-ui.js']])source=source.replace(marker,()=>fs.readFileSync(file,'utf8'));
 const elements=new Map(),handlers={},receivers=[],sent=[],timers=[];
-function el(id){if(!elements.has(id))elements.set(id,{id,value:'',dataset:{},innerHTML:'',textContent:'',hidden:false,disabled:false,checked:false,classList:{toggle(){}},listeners:{},addEventListener(t,f){this.listeners[t]=f;},showModal(){this.open=true;},close(){this.open=false;},closest(){return this;},hasAttribute(k){return k==='data-close'&&this.dataset.close!==undefined;},before(){},scrollIntoView(){}});return elements.get(id);}
+function el(id){if(!elements.has(id))elements.set(id,{id,value:'',dataset:{},innerHTML:'',textContent:'',hidden:false,disabled:false,checked:false,classList:{toggle(){}},listeners:{},addEventListener(t,f){this.listeners[t]=f;},showModal(){this.open=true;},close(){this.open=false;},closest(){return this;},hasAttribute(k){return k==='data-close'&&this.dataset.close!==undefined;},before(){},focus(){},scrollIntoView(){}});return elements.get(id);}
 const context=vm.createContext({console,document:{getElementById:el,createElement(){return el('created');},querySelectorAll(){return [];},addEventListener(t,f){(handlers[t]??=[]).push(f);}},window:{chrome:{webview:{addEventListener(_,f){receivers.push(f);},postMessage(s){sent.push(JSON.parse(s));}}}},setTimeout(){return 1;},clearTimeout(){},setInterval(f,ms){timers.push({f,ms});return timers.length;}});
 const run=s=>vm.runInContext(s,context),tick=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
 function reply(q,data,ok=true){assert.ok(q);receivers.forEach(f=>f({data:ok?{id:q.id,ok,data}:{id:q.id,ok,error:data}}));}
@@ -41,6 +41,17 @@ async function list(extra){await click('remote-xshell');reply(last('reverseList'
  const denied=sent.length;await click('reverse-new');await click('fake',{reverseAction:'connect',reverseId:profile.id});assert.equal(sent.length,denied);
  await list();assert.match(el('reverse-profiles').innerHTML,/&lt;VM &amp; one&gt;/);assert.match(el('reverse-profiles').innerHTML,/ops&lt;&amp;&gt;\.example/);assert.ok(!el('reverse-profiles').innerHTML.includes('<VM'));
  assert.match(el('modal-body').innerHTML,/id="reverse-form" hidden/);
+ assert.match(el('reverse-profiles').innerHTML,/data-reverse-action="edit"/);
+ await click('edit',{reverseAction:'edit',reverseId:profile.id});
+ reply(last('reverseEdit'),{...profile,key_path:'C:\\keys\\old',known_hosts_path:'C:\\ssh\\known_hosts',log_encoding:'gbk'});await tick();
+ assert.equal(el('reverse-host').value,profile.ssh_host);assert.equal(el('reverse-key').value,'C:\\keys\\old');
+ el('reverse-host').value='edited.example';
+ await click('reverse-save');await click('reverse-save');assert.equal(ops('reverseUpdate').length,1);
+ assert.equal(last('reverseUpdate').profile_id,profile.id);assert.equal(last('reverseUpdate').ssh_host,'edited.example');assert.equal(last('reverseUpdate').binding_mode,undefined);
+ reply(last('reverseUpdate'),'保存失败',false);await tick();assert.equal(el('reverse-host').value,'edited.example');assert.equal(el('reverse-form').hidden,false);
+ await click('reverse-save');reply(last('reverseUpdate'),{saved:true});await tick();reply(last('reverseList'),listing());await tick();
+ assert.equal(el('reverse-form').hidden,true);assert.equal(ops('reverseAdd').length,0);assert.equal(ops('reverseConnect').length,0);
+ await click('reverse-new');assert.equal(el('reverse-name').value,'');await click('reverse-cancel');assert.equal(el('reverse-form').hidden,true);
  await click('reverse-new');
  for(const [k,v] of Object.entries({name:'saved',host:'ops.example',port:'22',user:'operator',key:'C:\\keys\\a',known:'C:\\ssh\\known_hosts',remote:'18767',environment:'default'}))el('reverse-'+k).value=v;
  await click('reverse-save');assert.equal(last('reverseAdd').ssh_host,'ops.example');assert.equal(last('reverseAdd').ssh_port,22);assert.equal(last('reverseAdd').binding_mode,'manual_terminal');assert.equal(ops('reverseConnect').length,0);reply(last('reverseAdd'),{profile_id:profile.id});await tick();reply(last('reverseList'),listing());await tick();assert.equal(ops('reverseConnect').length,0);
@@ -49,6 +60,8 @@ async function list(extra){await click('remote-xshell');reply(last('reverseList'
  await click('encoding',{reverseAction:'encoding',reverseId:profile.id});assert.equal(last('reverseEncodingSave').log_encoding,'gbk');reply(last('reverseEncodingSave'),{saved:true});await tick();reply(last('reverseList'),listing());await tick();
  await click('connect',{reverseAction:'connect',reverseId:profile.id});await click('connect',{reverseAction:'connect',reverseId:profile.id});assert.equal(ops('reverseConnect').length,1);assert.equal(last('reverseConnect').profile_id,profile.id);reply(last('reverseConnect'),{});await tick();reply(last('reverseList'),listing({profiles:[{...profile,status:'awaiting_agent'}]}));await tick();assert.match(el('reverse-profiles').innerHTML,/SSH进程运行，等待脚本/);assert.match(el('reverse-profiles').innerHTML,/data-reverse-action="delete"[^>]*disabled/);
  assert.ok(!sent.some(q=>/exec|job|connectionSwitch|integrationApply/i.test(q.op)));
+ assert.match(el('reverse-profiles').innerHTML,/data-reverse-action="edit"[^>]*disabled/);
+ const activeEdits=ops('reverseEdit').length;await click('edit',{reverseAction:'edit',reverseId:profile.id});assert.equal(ops('reverseEdit').length,activeEdits);
  await click('export',{reverseAction:'export',reverseId:profile.id});assert.equal(last('reverseChoosePath').kind,'export');await click('export',{reverseAction:'export',reverseId:profile.id});assert.equal(ops('reverseChoosePath').length,1);
  reply(last('reverseChoosePath'),{path:'C:\\<private>&\\xshell_agent.js'});await tick();assert.equal(last('reverseExportPrepare').profile_id,profile.id);assert.equal(ops('reverseExportConfirm').length,0);
  const preview={path:'C:\\<private>&\\xshell_agent.js',profile:'<VM>',source_id:profile.id,endpoint:'http://127.0.0.1:18767',environment:'default',warning:'do not share <secret>'};
@@ -67,6 +80,7 @@ async function list(extra){await click('remote-xshell');reply(last('reverseList'
  const diagnostic='准备导出预览失败（EXPORT_ACCESS_DENIED）：文件访问或私有 ACL 设置被拒绝。\n所选路径：C:\\<private>&\\xshell_agent.js\n不会自动重试。';
  reply(last('reverseExportPrepare'),diagnostic,false);await tick();assert.equal(el('modal-error').textContent,diagnostic);assert.equal(run('modalKind'),'reverse');assert.equal(run('reverseTicket'),null);assert.equal(ops('reverseExportConfirm').length,beforeFailedConfirm);
  const afterFailedPrepare=sent.length;await tick();assert.equal(sent.length,afterFailedPrepare,'preflight error must not retry');
- run('state.read_only=true');await list();assert.equal(el('reverse-new').disabled,true);const readonly=sent.length;await click('fake',{reverseAction:'connect',reverseId:profile.id});await click('reverse-save');assert.equal(sent.length,readonly);
+ await list();await click('edit',{reverseAction:'edit',reverseId:profile.id});const oldEdit=last('reverseEdit');await click('close',{close:''});run("openModal('other','sentinel','','details')");reply(oldEdit,{...profile,key_path:'old',known_hosts_path:'old'});await tick();assert.equal(el('modal-body').innerHTML,'sentinel');
+ run('state.read_only=true');await list();assert.equal(el('reverse-new').disabled,true);const readonly=sent.length;await click('fake',{reverseAction:'connect',reverseId:profile.id});await click('edit',{reverseAction:'edit',reverseId:profile.id});await click('reverse-save');assert.equal(sent.length,readonly);
  console.log('PASS: actual inline reverse SSH events, lifecycle, tickets and stale responses');
 })().catch(e=>{console.error(e);process.exitCode=1;});

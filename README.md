@@ -1,4 +1,4 @@
-# Xshell Bridge 0.8.9
+# Xshell Bridge 0.8.10
 
 复用用户已经登录的 Xshell 终端，让 CLI/MCP 通过同一个 Bridge 提交命令、等待审批并读取输出。支持本机和远程 Xshell；不读取 SSH 密码，不自动登录目标服务器。
 
